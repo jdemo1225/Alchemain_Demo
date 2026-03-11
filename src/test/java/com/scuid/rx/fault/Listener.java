@@ -27,12 +27,12 @@ public class Listener extends UntypedActor {
 			log.info("Current progress: {} %", progress.percent);
 			if (progress.percent >= 100.0) {
 				log.info("That's all, shutting down");
-				getContext().system().shutdown();
+				getContext().system().terminate();
 			}
 		} else if (msg == ReceiveTimeout.getInstance()) {
 			// No progress within 15 seconds, ServiceUnavailable
 			log.error("Shutting down due to unavailable service");
-			getContext().system().shutdown();
+			getContext().system().terminate();
 		} else {
 			unhandled(msg);
 		}

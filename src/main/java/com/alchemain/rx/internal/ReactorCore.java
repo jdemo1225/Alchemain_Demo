@@ -82,7 +82,6 @@ public class ReactorCore {
 
 	public void shutdown() {
 		scheduler.stop();
-		system.shutdown();
-		system.awaitTermination();
+		system.terminate();
 	}
 }

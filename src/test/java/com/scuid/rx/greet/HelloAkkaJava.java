@@ -11,7 +11,7 @@ import akka.actor.Props;
 import com.typesafe.config.ConfigFactory;
 
 public class HelloAkkaJava {
-	public static void main(String[] args) {
+	public static void main(String[] args) throws java.util.concurrent.TimeoutException {
 		// Create the 'helloakka' actor system
 		final ActorSystem system = ActorSystem.create("helloakka", ConfigFactory.load());
 
