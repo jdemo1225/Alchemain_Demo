@@ -13,12 +13,12 @@
 
 		<akka-version>2.3.2</akka-version>
 		<codec-version>1.9</codec-version>
-		<es-version>5.6.15</es-version>
+		<es-version>7.17.25</es-version>
 		<groovy-version>2.1.8</groovy-version>
 		<guava-version>15.0</guava-version>
 		<guice-version>3.0</guice-version>
 		<hc-fluent-version>4.3.4</hc-fluent-version>
-		<jackson-version>2.3.5</jackson-version>
+		<jackson-version>2.14.2</jackson-version>
 		<javassist-version>3.18.1-GA</javassist-version>
 		<jongo-version>1.0</jongo-version>
 		<json-patch-version>1.7</json-patch-version>
@@ -180,6 +180,11 @@
 		<dependency>
 			<groupId>org.elasticsearch.client</groupId>
 			<artifactId>transport</artifactId>
+			<version>${es-version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.elasticsearch.client</groupId>
+			<artifactId>elasticsearch-rest-high-level-client</artifactId>
 			<version>${es-version}</version>
 		</dependency>
 		<dependency>
