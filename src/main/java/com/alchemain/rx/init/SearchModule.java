@@ -3,11 +3,9 @@ package com.alchemain.rx.init;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-import org.elasticsearch.client.Client;
-import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
-import org.elasticsearch.transport.client.PreBuiltTransportClient;
+import org.apache.http.HttpHost;
+import org.elasticsearch.client.RestClient;
+import org.elasticsearch.client.RestHighLevelClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,11 +23,11 @@ public class SearchModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(Client.class).toInstance(esConnect());
+        bind(RestHighLevelClient.class).toInstance(esConnect());
         bind(SearchWrapper.class).in(Scopes.SINGLETON);
     }
 
-    public Client esConnect() {
+    public RestHighLevelClient esConnect() {
         String transportMethod = PropertiesUtil.string(CLIENT_METHOD);
         String clusterName = PropertiesUtil.string(CLUSTER_NAME);
         if (clusterName == null)
@@ -38,17 +36,16 @@ public class SearchModule extends AbstractModule {
         log.trace("Creating ES Client:  cluster = {}, transport = {}", clusterName, transportMethod);
 
         String[] hosts = PropertiesUtil.string(CLIENT_HOSTS).split(",");
-        Settings settings = Settings.builder().put("cluster.name", clusterName).build();
-        TransportClient client = new PreBuiltTransportClient(settings);
-        for (String host : hosts) {
-            String[] constituents = host.split(":");
+        HttpHost[] httpHosts = new HttpHost[hosts.length];
+        for (int i = 0; i < hosts.length; i++) {
+            String[] constituents = hosts[i].split(":");
             try {
-                client.addTransportAddress(new InetSocketTransportAddress(InetAddress.getByName(constituents[0]), Integer.parseInt(constituents[1])));
+                httpHosts[i] = new HttpHost(InetAddress.getByName(constituents[0]), Integer.parseInt(constituents[1]), "http");
             } catch (UnknownHostException e) {
                 log.error("Failed to add transport address: {}", e.getMessage());
             }
         }
-        return client;
+        return new RestHighLevelClient(RestClient.builder(httpHosts));
     }
 }
 

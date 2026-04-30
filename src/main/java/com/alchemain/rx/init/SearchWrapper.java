@@ -2,15 +2,20 @@ package com.alchemain.rx.init;
 
 import java.util.Iterator;
 
+import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.delete.DeleteResponse;
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,27 +31,27 @@ import com.alchemain.rx.bus.JsonProvider;
 public class SearchWrapper implements Constants {
     private final Logger log = LoggerFactory.getLogger(this.getClass());
 
-    private Client searchClient;
+    private RestHighLevelClient searchClient;
 
     @Inject
-    public SearchWrapper(Client searchClient) {
+    public SearchWrapper(RestHighLevelClient searchClient) {
         this.searchClient = searchClient;
     }
 
     public String indexObject(ExecutionContext context, String resource, String _id, JsonNode data) throws Exception {
 
-        // The ES Java API doesn't take a JSON node directly, so we have to
-        // stringify it.
         String dataAsString = JsonProvider.INSTANCE.getMapper().writeValueAsString(data);
 
-        IndexResponse response = searchClient.prepareIndex(context.getTenant(), resource, _id).setSource(dataAsString, XContentType.JSON)
-                .execute().actionGet();
+        IndexRequest request = new IndexRequest(context.getTenant(), resource, _id)
+                .source(dataAsString, XContentType.JSON);
+        IndexResponse response = searchClient.index(request, RequestOptions.DEFAULT);
         return response.getId();
     }
 
     public Boolean deleteObject(ExecutionContext context, String resource, String _id) throws Exception {
 
-        DeleteResponse response = searchClient.prepareDelete(context.getTenant(), resource, _id).execute().actionGet();
+        DeleteRequest request = new DeleteRequest(context.getTenant(), resource, _id);
+        DeleteResponse response = searchClient.delete(request, RequestOptions.DEFAULT);
         return response.getResult() == DocWriteResponse.Result.DELETED;
     }
 
@@ -65,42 +70,43 @@ public class SearchWrapper implements Constants {
 
         QueryBuilder queryBuilder = QueryBuilders.queryStringQuery(query);
 
+        SearchRequest searchRequest = new SearchRequest(context.getTenant());
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         if (resource != null) {
             log.debug("Executing search query [{}] on tenant [{}] using type [{}]", query, context.getTenant(),
                     resource);
-            response = searchClient.prepareSearch(context.getTenant()).setTypes(resource)
-                    .setQuery(queryBuilder).addSort(DISPLAY_NAME, SortOrder.ASC)
-                    .setFrom(offset).setSize(limit).execute().actionGet();
+            searchRequest.types(resource);
+            sourceBuilder.query(queryBuilder).sort(DISPLAY_NAME, SortOrder.ASC)
+                    .from(offset).size(limit);
         } else {
             log.debug("Executing search query [{}] on tenant [{}] with no specified type", query,
                     context.getTenant());
-            response = searchClient.prepareSearch(context.getTenant()).setQuery(queryBuilder)
-                    .addSort(DISPLAY_NAME, SortOrder.ASC).setFrom(offset).setSize(limit).execute().actionGet();
+            sourceBuilder.query(queryBuilder)
+                    .sort(DISPLAY_NAME, SortOrder.ASC).from(offset).size(limit);
         }
+        searchRequest.source(sourceBuilder);
+        response = searchClient.search(searchRequest, RequestOptions.DEFAULT);
 
         return generatePagedResponse(response, offset, limit);
 
     }
 
-    /*
-     * This query is essentially used as an exact match, and the expectation is
-     * that it will return a single result. If a "fuzzier" search is desired
-     * (when there could possibly be multiple matches to a single search term),
-     * use the executeSimpleQuery method above.
-     */
     public JsonNode executeMatchQuery(ExecutionContext context, String resource, String field, String query)
             throws Exception {
 
         SearchResponse response = null;
+        SearchRequest searchRequest = new SearchRequest(context.getTenant());
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         if (resource != null) {
-            response = searchClient.prepareSearch(context.getTenant()).setTypes(resource)
-                    .setQuery(QueryBuilders.matchQuery(field, query)).execute().actionGet();
+            searchRequest.types(resource);
+            sourceBuilder.query(QueryBuilders.matchQuery(field, query));
         } else {
-            response = searchClient.prepareSearch(context.getTenant()).setQuery(QueryBuilders.matchQuery(field, query))
-                    .execute().actionGet();
+            sourceBuilder.query(QueryBuilders.matchQuery(field, query));
         }
+        searchRequest.source(sourceBuilder);
+        response = searchClient.search(searchRequest, RequestOptions.DEFAULT);
 
-        if (response.getHits().getTotalHits() != 1) {
+        if (response.getHits().getTotalHits().value != 1) {
             throw new Exception(String.format("Multiple matches found for an exact match query! field: %s, query: %s",
                     field, query));
         }
@@ -120,7 +126,7 @@ public class SearchWrapper implements Constants {
         ObjectNode pagingInfo = pagedResponse.putObject(PAGING);
         pagingInfo.put(OFFSET, offset);
         pagingInfo.put(LIMIT, limit);
-        pagingInfo.put(TOTAL_COUNT, matches.getHits().getTotalHits());
+        pagingInfo.put(TOTAL_COUNT, matches.getHits().getTotalHits().value);
         ArrayNode responseData = pagedResponse.putArray(DATA);
 
         Iterator<SearchHit> hit_it = matches.getHits().iterator();
